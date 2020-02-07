@@ -932,12 +932,16 @@ function Install-LabRootDcs
             $machinesToStart += Get-LabVM | Where-Object { -not $_.IsDomainJoined }
         }
 
-        Wait-LabVMRestart -ComputerName $machines.Name -StartMachinesWhileWaiting $machinesToStart -DoNotUseCredSsp -ProgressIndicator 30 -TimeoutInMinutes $DcPromotionRestartTimeout -ErrorAction Stop -MonitorJob $jobs -NoNewLine
-        Write-ScreenInfo -Message done
+        if ($lab.DefaultVirtualizationEngine -ne 'Azure')
+        {
+            Wait-LabVMRestart -ComputerName $machines.Name -StartMachinesWhileWaiting $machinesToStart -DoNotUseCredSsp -ProgressIndicator 30 -TimeoutInMinutes $DcPromotionRestartTimeout -ErrorAction Stop -MonitorJob $jobs -NoNewLine
+            Write-ScreenInfo -Message done
 
-        Write-ScreenInfo -Message 'Root Domain Controllers have now restarted. Waiting for Active Directory to start up' -NoNewLine
+            Write-ScreenInfo -Message 'Root Domain Controllers have now restarted. Waiting for Active Directory to start up' -NoNewLine
 
-        Wait-LabVM -ComputerName $machines -DoNotUseCredSsp -TimeoutInMinutes 30 -ProgressIndicator 30 -NoNewLine
+            Wait-LabVM -ComputerName $machines -DoNotUseCredSsp -TimeoutInMinutes 30 -ProgressIndicator 30 -NoNewLine
+        }
+
         Wait-LabADReady -ComputerName $machines -TimeoutInMinutes $AdwsReadyTimeout -ErrorAction Stop -ProgressIndicator 30 -NoNewLine
 
         #Create reverse lookup zone (forest scope)
@@ -1027,6 +1031,13 @@ function Install-LabRootDcs
                 New-LabADSite -ComputerName $machine -SiteName $dcRole.Properties.SiteName -SiteSubnet $dcRole.Properties.SiteSubnet
                 Move-LabDomainController -ComputerName $machine -SiteName $dcRole.Properties.SiteName
             }
+        }
+        
+        foreach ($machine in $machines)
+        {
+            Reset-LabAdPassword -DomainName $machine.DomainName
+            Remove-LabPSSession -ComputerName $machine
+            Enable-LabAutoLogon -ComputerName $machine
         }
 
         if ($CreateCheckPoints)
@@ -1259,15 +1270,19 @@ function Install-LabFirstChildDcs
             $machinesToStart += Get-LabVM | Where-Object DomainName -in $domains
         }
 
-        Wait-LabVMRestart -ComputerName $machines.name -StartMachinesWhileWaiting $machinesToStart -ProgressIndicator 45 -TimeoutInMinutes $DcPromotionRestartTimeout -ErrorAction Stop -MonitorJob $jobs -NoNewLine
-        Write-ScreenInfo done
+        if ($lab.DefaultVirtualizationEngine -ne 'Azure')
+        {
+            Wait-LabVMRestart -ComputerName $machines.name -StartMachinesWhileWaiting $machinesToStart -ProgressIndicator 45 -TimeoutInMinutes $DcPromotionRestartTimeout -ErrorAction Stop -MonitorJob $jobs -NoNewLine
+            Write-ScreenInfo done
 
-        Write-ScreenInfo -Message 'First Child Domain Controllers have now restarted. Waiting for Active Directory to start up' -NoNewLine
+            Write-ScreenInfo -Message 'First Child Domain Controllers have now restarted. Waiting for Active Directory to start up' -NoNewLine
 
-        #Wait a little to be able to connect in first attempt
-        Wait-LWLabJob -Job (Start-Job -Name 'Delay waiting for machines to be reachable' -ScriptBlock { Start-Sleep -Seconds 60 }) -ProgressIndicator 20 -NoDisplay -NoNewLine
+            #Wait a little to be able to connect in first attempt
+            Wait-LWLabJob -Job (Start-Job -Name 'Delay waiting for machines to be reachable' -ScriptBlock { Start-Sleep -Seconds 60 }) -ProgressIndicator 20 -NoDisplay -NoNewLine
 
-        Wait-LabVM -ComputerName $machines -TimeoutInMinutes 30 -ProgressIndicator 20 -NoNewLine
+            Wait-LabVM -ComputerName $machines -TimeoutInMinutes 30 -ProgressIndicator 20 -NoNewLine
+        }
+
 
         Wait-LabADReady -ComputerName $machines -TimeoutInMinutes $AdwsReadyTimeout -ErrorAction Stop -ProgressIndicator 20 -NoNewLine
 
@@ -1311,6 +1326,13 @@ function Install-LabFirstChildDcs
             $jobs += Sync-LabActiveDirectory -ComputerName $dc -ProgressIndicator 20 -AsJob -Passthru
         }
         Wait-LWLabJob -Job $jobs -ProgressIndicator 20 -NoDisplay -NoNewLine
+        
+        foreach ($machine in $machines)
+        {
+            Reset-LabAdPassword -DomainName $machine.DomainName
+            Remove-LabPSSession -ComputerName $machine
+            Enable-LabAutoLogon -ComputerName $machine
+        }
 
         if ($CreateCheckPoints)
         {
@@ -1524,17 +1546,20 @@ function Install-LabDcs
             $machinesToStart += Get-LabVM | Where-Object DomainName -notin $domains
         }
 
-        Wait-LabVMRestart -ComputerName $machines -StartMachinesWhileWaiting $machinesToStart -TimeoutInMinutes $DcPromotionRestartTimeout -MonitorJob $jobs -ProgressIndicator 60 -NoNewLine -ErrorAction Stop
-        Write-ScreenInfo -Message done
+        if ($lab.DefaultVirtualizationEngine -ne 'Azure')
+        {
+            Wait-LabVMRestart -ComputerName $machines -StartMachinesWhileWaiting $machinesToStart -TimeoutInMinutes $DcPromotionRestartTimeout -MonitorJob $jobs -ProgressIndicator 60 -NoNewLine -ErrorAction Stop
+            Write-ScreenInfo -Message done
 
-        Write-ScreenInfo -Message 'Additional Domain Controllers have now restarted. Waiting for Active Directory to start up' -NoNewLine
+            Write-ScreenInfo -Message 'Additional Domain Controllers have now restarted. Waiting for Active Directory to start up' -NoNewLine
 
-        #Wait a little to be able to connect in first attempt
-        Wait-LWLabJob -Job (Start-Job -Name 'Delay waiting for machines to be reachable' -ScriptBlock {
-                Start-Sleep -Seconds 60
-        }) -ProgressIndicator 20 -NoDisplay -NoNewLine
+            #Wait a little to be able to connect in first attempt
+            Wait-LWLabJob -Job (Start-Job -Name 'Delay waiting for machines to be reachable' -ScriptBlock {
+                    Start-Sleep -Seconds 60
+            }) -ProgressIndicator 20 -NoDisplay -NoNewLine
 
-        Wait-LabVM -ComputerName $machines -TimeoutInMinutes 30 -ProgressIndicator 20 -NoNewLine
+            Wait-LabVM -ComputerName $machines -TimeoutInMinutes 30 -ProgressIndicator 20 -NoNewLine
+        }
 
         Wait-LabADReady -ComputerName $machines -TimeoutInMinutes $AdwsReadyTimeout -ErrorAction Stop -ProgressIndicator 20 -NoNewLine
 
@@ -1542,6 +1567,7 @@ function Install-LabDcs
         Restart-ServiceResilient -ComputerName $machines -ServiceName nlasvc -NoNewLine
 
         Enable-LabVMRemoting -ComputerName $machines
+        Enable-LabAutoLogon -ComputerName $machines
 
         #DNS client configuration is change by DCpromo process. Change this back
         Reset-DNSConfiguration -ComputerName (Get-LabVM -Role DC) -ProgressIndicator 20 -NoNewLine
@@ -1703,7 +1729,7 @@ function Test-LabADReady
 
     $adReady = Invoke-LabCommand -ComputerName $machine -ActivityName GetAdwsServiceStatus -ScriptBlock {
 
-        if ((Get-Service -Name ADWS).Status -eq 'Running')
+        if ((Get-Service -Name ADWS -ErrorAction SilentlyContinue).Status -eq 'Running')
         {
             try
             {
@@ -1811,6 +1837,11 @@ function Sync-LabActiveDirectory
             $VerbosePreference = $using:VerbosePreference
 
             ipconfig.exe -flushdns
+
+            if (-not -(Test-Path -Path C:\DeployDebug))
+            {
+                New-Item C:\DeployDebug -Force -ItemType Directory | Out-Null
+            }
 
             Write-Verbose -Message 'Getting list of DCs'
             $dcs = repadmin.exe /viewlist *
@@ -2225,7 +2256,7 @@ function Install-LabDnsForwarder
         }
     }
 }
-#region Install-LabDnsForwarder
+#endregion Install-LabDnsForwarder
 
 #region Install-LabADDSTrust
 function Install-LabADDSTrust
@@ -2313,4 +2344,38 @@ function Install-LabADDSTrust
         }
     }
 }
-#region Install-LabADDSTrust
+#endregion Install-LabADDSTrust
+
+#region Reset-LabAdPassword
+function Reset-LabAdPassword
+{
+    param(
+        [Parameter(Mandatory)]
+        [string]$DomainName
+    )
+    
+    $lab = Get-Lab
+    $domain = $lab.Domains | Where-Object Name -eq $DomainName
+    $vm = Get-LabVM -Role RootDC, FirstChildDC | Where-Object DomainName -eq $DomainName
+    
+    Invoke-LabCommand -ActivityName 'Reset Administrator password in AD' -ScriptBlock {
+        Add-Type -AssemblyName System.DirectoryServices.AccountManagement
+        $ctx = New-Object System.DirectoryServices.AccountManagement.PrincipalContext('Domain')
+        $i = 0
+        while (-not $u -and $i -lt 25)
+        {
+            try
+            {
+                $u = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity($ctx, $args[0])
+                $u.SetPassword($args[1])
+            }
+            catch
+            {
+                Start-Sleep -Seconds 10
+                $i++
+            }
+        }
+        
+    } -ComputerName $vm -ArgumentList $domain.Administrator.UserName, $domain.Administrator.Password -NoDisplay
+}
+#endregion Reset-LabAdPassword

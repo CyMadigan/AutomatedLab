@@ -522,7 +522,7 @@ function Get-LabInternetFile
                         Write-Verbose 'Responce received'
                         $remoteStream = $response.GetResponseStream()
                         $parent = Split-Path -Path $Path
-                        if (-not (Test-Path -Path $Path))
+                        if (-not (Test-Path -Path $Path) -and -not ([System.IO.Path]::GetPathRoot($parent) -eq $parent))
                         {
                             New-Item -Path $parent -ItemType Directory -Force | Out-Null
                         }
@@ -849,10 +849,18 @@ function Update-LabSysinternalsTools
 
             if ($versions['SysInternals'] -ne $updateStringFromWebPage)
             {
-                Write-ScreenInfo -Message 'Performing update of SysInternals suite now' -Type Warning -TaskStart
+                Write-ScreenInfo -Message 'Performing update of SysInternals suite and lab sources directory now' -Type Warning -TaskStart
                 Start-Sleep -Seconds 1
+                
+                # Download Lab Sources
+                $labSources = Get-LabSourcesLocation -Local
+                if ($null -ne $labSources)
+                {
+                    $drive = ($labSources -split ':')[0]
+                    $null = New-LabSourcesFolder -DriveLetter $drive -Force -ErrorAction SilentlyContinue
+                }
 
-                #Download SysInternals suite
+                # Download SysInternals suite
 
                 $tempFilePath = [System.IO.Path]::GetTempFileName()
                 $tempFilePath = Rename-Item -Path $tempFilePath -NewName ([System.IO.Path]::ChangeExtension($tempFilePath, '.zip')) -PassThru
