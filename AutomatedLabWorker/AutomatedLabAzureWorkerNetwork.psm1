@@ -1,4 +1,4 @@
-$PSDefaultParameterValues = @{
+﻿$PSDefaultParameterValues = @{
     '*-Azure*:Verbose'      = $false
     '*-Azure*:Warning'      = $false
     'Import-Module:Verbose' = $false
@@ -44,9 +44,9 @@ function New-LWAzureNetworkSwitch
                 CreationTime = Get-Date
             }
         }
-         
+
         $azureSubnets = @()
-        
+
         foreach ($subnet in $network.Subnets)
         {
             $azureSubnets += New-AzVirtualNetworkSubnetConfig -Name $subnet.Name -AddressPrefix $subnet.AddressSpace.ToString()
@@ -139,15 +139,15 @@ function Remove-LWAzureNetworkSwitch
     $lab = Get-Lab
     $resourceGroupName = Get-LabAzureDefaultResourceGroup
 
-    Write-ScreenInfo -Message "Removing virtual network(s) '$($VirtualNetwork.Name -join ', ')'" -Type Warning    
+    Write-ScreenInfo -Message "Removing virtual network(s) '$($VirtualNetwork.Name -join ', ')'" -Type Warning
 
-    
+
     $jobs = foreach ($network in $VirtualNetwork)
     {
         Write-PSFMessage "Start removal of virtual network '$($network.name)'"
         Remove-AzVirtualNetwork -Name $network.Name -ResourceGroupName $resourceGroupName -AsJob -Force
     }
-    
+
     Write-PSFMessage "Waiting on the removal of $($jobs.Count)"
     Wait-LWLabJob -Job $jobs
 
@@ -365,6 +365,19 @@ function Add-LWAzureLoadBalancedPort
     $nic.IpConfigurations[0].LoadBalancerInboundNatRules = $rules
     [void] ($nic | Set-AzNetworkInterface)
 
+    # Extend NSG
+    $nsg = Get-AzNetworkSecurityGroup -Name "$($lab.Name)nsg" -ResourceGroupName $resourceGroup
+
+    $rule = $nsg | Get-AzNetworkSecurityRuleConfig -Name NecessaryPorts
+    if (-not $rule.DestinationPortRange.Contains($DestinationPort))
+    {
+        $rule.DestinationPortRange.Add($DestinationPort)
+        
+        # Update the NSG.
+        $nsg = $nsg | Set-AzNetworkSecurityRuleConfig -Name $rule.Name -DestinationPortRange $rule.DestinationPortRange -Protocol $rule.Protocol -SourcePortRange $rule.SourcePortRange -SourceAddressPrefix $rule.SourceAddressPrefix -DestinationAddressPrefix $rule.DestinationAddressPrefix -Access Allow -Priority $rule.Priority -Direction $rule.Direction
+        $null = $nsg | Set-AzNetworkSecurityGroup
+    }
+
     if (-not $machine.InternalNotes."AdditionalPort-$Port-$DestinationPort")
     {
         $machine.InternalNotes.Add("AdditionalPort-$Port-$DestinationPort", $DestinationPort)
@@ -421,7 +434,7 @@ function Get-LWAzureLoadBalancedPort
 
         return $filteredRules
     }
-    
+
     if ($DestinationPort)
     {
         return ($existingConfiguration | Where-Object {$_.BackendPort -eq $DestinationPort -and $_.Name -like "$ComputerName*"})
