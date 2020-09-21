@@ -32,8 +32,55 @@ function New-LabBaseImages
             throw $message
         }
 
-        $baseDiskPath = Join-Path -Path $lab.Target.Path -ChildPath "BASE_$($os.OperatingSystemName.Replace(' ', ''))_$($os.Version).vhdx"
+        $legacyDiskPath = Join-Path -Path $lab.Target.Path -ChildPath "BASE_$($os.OperatingSystemName.Replace(' ', ''))_$($os.Version).vhdx"
+        if (Test-Path $legacyDiskPath)
+        {
+            [int]$legacySize = (Get-Vhd -Path $legacyDiskPath).Size / 1GB
+            $newName = Join-Path -Path $lab.Target.Path -ChildPath "BASE_$($os.OperatingSystemName.Replace(' ', ''))_$($os.Version)_$($legacySize).vhdx"
+            $affectedDisks = @()
+            $affectedDisks += Get-VM | Get-VMHardDiskDrive | Get-VHD | Where-Object ParentPath -eq $legacyDiskPath
+            $affectedDisks += Get-VM | Get-VMSnapshot | Get-VMHardDiskDrive | Get-VHD | Where-Object ParentPath -eq $legacyDiskPath
+            
+            if ($affectedDisks)
+            {
+                $affectedVms = Get-VM | Where-Object {
+                    ($_ | Get-VMHardDiskDrive | Get-VHD | Where-Object { $_.ParentPath -eq $legacyDiskPath -and $_.Attached }) -or
+                    ($_ | Get-VMSnapshot | Get-VMHardDiskDrive | Get-VHD | Where-Object { $_.ParentPath -eq $legacyDiskPath -and $_.Attached })                
+                }
+            }
+
+            if ($affectedVms)
+            {
+                Write-ScreenInfo -Type Warning -Message "Unable to rename $(Split-Path -Leaf -Path $legacyDiskPath) to $(Split-Path -Leaf -Path $newName), disk is currently in use by VMs: $($affectedVms.Name -join ',').
+                You will need to clean up the disk manually, while a new reference disk is being created. To cancel, press CTRL-C and shut down the affected VMs manually."
+                $count = 5
+                do
+                {
+                    Write-ScreenInfo -Type Warning -NoNewLine:$($count -ne 1) -Message "$($count) "
+                    Start-Sleep -Seconds 1
+                    $count--
+                }
+                until ($count -eq 0)
+                Write-ScreenInfo -Type Warning -Message "A new reference disk will be created."
+            }
+            elseif (-not (Test-Path -Path $newName))
+            {
+                Write-ScreenInfo -Message "Renaming $(Split-Path -Leaf -Path $legacyDiskPath) to $(Split-Path -Leaf -Path $newName) and updating VHD parent paths"                
+                Rename-Item -Path $legacyDiskPath -NewName $newName
+                $affectedDisks | Set-VHD -ParentPath $newName
+            }
+            else
+            {
+                # This is the critical scenario: If both files exist (i.e. a VM was running and the disk could not be renamed)
+                # changing the parent of the VHD to the newly created VHD would not work. Renaming the old VHD to the new format
+                # would also not work, as there would again be ID conflicts. All in all, the worst situtation
+                Write-ScreenInfo -Type Warning -Message "Unable to rename $(Split-Path -Leaf -Path $legacyDiskPath) to $(Split-Path -Leaf -Path $newName) since both files exist and would cause issues with the Parent Disk ID for existing differencing disks"
+            }
+        }
+
+        $baseDiskPath = Join-Path -Path $lab.Target.Path -ChildPath "BASE_$($os.OperatingSystemName.Replace(' ', ''))_$($os.Version)_$($lab.Target.ReferenceDiskSizeInGB).vhdx"
         $os.BaseDiskPath = $baseDiskPath
+
 
         $hostOsVersion = [System.Environment]::OSVersion.Version
 
@@ -352,12 +399,12 @@ function Update-LabIsoImage
         New-Item -ItemType Directory -Path $OutputPath | Out-Null
 
 
-        $image = Mount-LabDiskImage -ImagePath $SourceIsoImagePath -PassThru
+        $image = Mount-LabDiskImage -ImagePath $SourceIsoImagePath -StorageType ISO -PassThru
         Get-PSDrive | Out-Null #This is just to refresh the drives. Somehow if this cmdlet is not called, PowerShell does not see the new drives.
 
         if($image)
         {
-            $source = Join-Path -Path ([IO.DriveInfo]$image.DriveLetter).Name -ChildPath '*'
+            $source = Join-Path -Path ([IO.DriveInfo][string]$image.DriveLetter).Name -ChildPath '*'
 
             Write-PSFMessage -Message "Extracting ISO image '$source' to '$OutputPath'"
             Copy-Item -Path $source -Destination $OutputPath -Recurse -Force
@@ -386,7 +433,7 @@ function Update-LabIsoImage
             return
         }
 
-        $image = Mount-DiskImage $IsoImagePath -PassThru
+        $image = Mount-DiskImage $IsoImagePath -StorageType ISO -PassThru
         $image | Get-Volume | Select-Object -ExpandProperty FileSystemLabel
         [void] ($image | Dismount-DiskImage)
     }

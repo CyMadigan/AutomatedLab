@@ -46,10 +46,12 @@
         'AutomatedLabHybrid.psm1',
         'AutomatedLabFailover.psm1',
         'AutomatedLabTfs.psm1',
+        'AutomatedLabWac.psm1',
         'AutomatedLabHyperV.psm1',
         'AutomatedLabDiskImageLinux.psm1',
         'AutomatedLabDiskImageWindows.psm1',
-        'AutomatedLabRemoting.psm1'
+        'AutomatedLabRemoting.psm1',
+        'AutomatedLabScvmm.psm1'
     )
 
     RequiredModules        = @(
@@ -57,7 +59,6 @@
         'PSLog',
         'PSFileTransfer',
         'AutomatedLabWorker',
-        'AutomatedLab.Ships',
         'HostsFile',
         'AutomatedLabUnattended',
         'AutomatedLabNotifications',
@@ -68,6 +69,9 @@
     CmdletsToExport        = @()
 
     FunctionsToExport      = @(
+        'Install-LabScvmm',
+        'Install-LabRdsCertificate',
+        'Uninstall-LabRdsCertificate',
         'New-LabSourcesFolder',
         'Add-LabAzureSubscription',
         'Add-LabCertificate',
@@ -78,6 +82,7 @@
         'Clear-LabCache',
         'Connect-Lab',
         'Connect-LabVM',
+        'Copy-LabALCommon',
         'Disable-LabVMFirewallGroup',
         'Disconnect-Lab',
         'Dismount-LabIsoImage',
@@ -120,6 +125,7 @@
         'Get-LabWindowsFeature',
         'Get-LabAzureAvailableSku',
         'Get-LabAzureAvailableRoleSize',
+        'Get-LabTfsUri',
         'Import-Lab',
         'Import-LabAzureCertificate',
         'Install-Lab',
@@ -145,6 +151,8 @@
         'Install-LabWindowsFeature',
         'Install-LabTeamFoundationEnvironment',
         'Install-LabHyperV',
+        'Install-LabWindowsAdminCenter',
+        'Add-LabWacManagedNode',
         'Invoke-LabCommand',
         'Invoke-LabDscConfiguration',
         'Join-LabVMDomain',
@@ -205,6 +213,7 @@
         'Test-LabMachineInternetConnectivity',
         'Test-LabHostRemoting',
         'Test-LabPathIsOnLabAzureLabSourcesStorage',
+        'Test-LabTfsEnvironment',
         'Unblock-LabSources',
         'Undo-LabHostRemoting',
         'Uninstall-LabWindowsFeature'
@@ -221,6 +230,7 @@
         'Get-LabCache',
         'New-LabReleasePipeline',
         'Get-LabAzureLoadBalancedPort',
+        'Get-LabTfsParameter',
         'Open-LabTfsSite'
         'Enable-LabTelemetry',
         'Disable-LabTelemetry',

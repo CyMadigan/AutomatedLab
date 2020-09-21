@@ -74,7 +74,7 @@ function Invoke-LWCommand
 
     if ($DependencyFolderPath)
     {
-        $result = ?? { (Get-Lab).DefaultVirtualizationEngine -eq 'Azure' } `
+        $result = ?? { (Get-Lab).DefaultVirtualizationEngine -eq 'Azure' -and (Test-LabPathIsOnLabAzureLabSourcesStorage -Path $DependencyFolderPath) } `
         { Test-LabPathIsOnLabAzureLabSourcesStorage -Path $DependencyFolderPath } `
         { Test-Path -Path $DependencyFolderPath }
         
@@ -87,7 +87,7 @@ function Invoke-LWCommand
 
     if ($ScriptFilePath)
     {
-        $result = ?? { (Get-Lab).DefaultVirtualizationEngine -eq 'Azure' } `
+        $result = ?? { (Get-Lab).DefaultVirtualizationEngine -eq 'Azure' -and (Test-LabPathIsOnLabAzureLabSourcesStorage -Path $ScriptFilePath)} `
         { Test-LabPathIsOnLabAzureLabSourcesStorage -Path $ScriptFilePath } `
         { Test-Path -Path $ScriptFilePath }
         
@@ -137,11 +137,11 @@ function Invoke-LWCommand
             {
                 if ((Get-Item -Path $DependencyFolderPath).PSIsContainer)
                 {
-                    Send-Directory -SourceFolderPath $DependencyFolderPath -DestinationFolder (Join-Path -Path C:\ -ChildPath (Split-Path -Path $DependencyFolderPath -Leaf)) -Session $internalSession
+                    Send-Directory -SourceFolderPath $DependencyFolderPath -DestinationFolder (Join-Path -Path / -ChildPath (Split-Path -Path $DependencyFolderPath -Leaf)) -Session $internalSession
                 }
                 else
                 {
-                    Send-File -SourceFilePath $DependencyFolderPath -DestinationFolderPath C:\ -Session $internalSession
+                    Send-File -SourceFilePath $DependencyFolderPath -DestinationFolderPath / -Session $internalSession
                 }
             }
         }
@@ -151,7 +151,7 @@ function Invoke-LWCommand
             $cmd = ''
             if ($ScriptFileName)
             {
-                $cmd += "& '$(Join-Path -Path C:\ -ChildPath (Split-Path $DependencyFolderPath -Leaf))\$ScriptFileName'"
+                $cmd += "& '$(Join-Path -Path / -ChildPath (Split-Path $DependencyFolderPath -Leaf))\$ScriptFileName'"
             }
             if ($ParameterVariableName)
             {
@@ -627,12 +627,12 @@ function Install-LWAzureWindowsFeature
         {
             if ($m.OperatingSystem.Installation -eq 'Client')
             {
-                $cmd = [scriptblock]::Create("Enable-WindowsOptionalFeature -Online -FeatureName $($FeatureName -join ', ') -Source ""`$(@(Get-WmiObject -Class Win32_CDRomDrive)[-1].Drive)\sources\sxs"" -All:`$$IncludeAllSubFeature -NoRestart -WarningAction SilentlyContinue")
+                $cmd = [scriptblock]::Create("Enable-WindowsOptionalFeature -Online -FeatureName $($FeatureName -join ', ') -Source 'C:\Windows\WinSXS' -All:`$$IncludeAllSubFeature -NoRestart -WarningAction SilentlyContinue")
                 $result += Invoke-LabCommand -ComputerName $m -ActivityName $activityName -NoDisplay -ScriptBlock $cmd -UseLocalCredential:$UseLocalCredential -AsJob:$AsJob -PassThru:$PassThru
             }
             else
             {
-                $cmd = [scriptblock]::Create("Install-WindowsFeature $($FeatureName -join ', ') -Source ""`$(@(Get-WmiObject -Class Win32_CDRomDrive)[-1].Drive)\sources\sxs"" -IncludeAllSubFeature:`$$IncludeAllSubFeature -IncludeManagementTools:`$$IncludeManagementTools -WarningAction SilentlyContinue")
+                $cmd = [scriptblock]::Create("Install-WindowsFeature $($FeatureName -join ', ') -Source 'C:\Windows\WinSXS' -IncludeAllSubFeature:`$$IncludeAllSubFeature -IncludeManagementTools:`$$IncludeManagementTools -WarningAction SilentlyContinue")
                 $result += Invoke-LabCommand -ComputerName $m -ActivityName $activityName -NoDisplay -ScriptBlock $cmd -UseLocalCredential:$UseLocalCredential -AsJob:$AsJob -PassThru:$PassThru
             }
         }
